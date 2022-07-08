@@ -9,6 +9,7 @@ import time
 
 # Sets up selenium
 chrome_options = Options()
+chrome_options.add_argument("--headless")
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)  
 
 def get_pocasi():
