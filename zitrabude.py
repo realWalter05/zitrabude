@@ -133,6 +133,6 @@ if __name__ == "__main__":
     cl = get_client()
     post_weather(cl)
 
-    # Removing imgs
+    # Removing img results
     os.remove("pocasi.jpg")
     os.remove("pocasi.png")
