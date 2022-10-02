@@ -2,14 +2,22 @@ from instagrapi import Client
 from pathlib import Path
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
 from PIL import Image, ImageOps
 import requests
-import datetime
+from datetime import timedelta, datetime, date
 from io import BytesIO
 import os
 import random
+import time
+import cv2
 
 
 def get_pocasi():
@@ -102,37 +110,158 @@ def create_template():
 
 def get_client():
     cl = Client()
-    cl.login("zitrabude", "z&t#aBuDe9541593786")
+    cl.load_settings('dumped.json')
+    #cl.login("zitrabude_", "Z&traB&de", verification_code=input("Code: "))  
+
+    cl.dump_settings('dumped.json')
+    
     print("Client logged")
     return cl
 
 
 def post_weather(cl):
     weather_img = Path("pocasi.jpg")
-
-    tmrw = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%-d. %-m. %Y")
+    if os.name == 'nt':
+        tmrw = (date.today() + timedelta(days=1)).strftime("%d. %m. %Y")   
+    else:
+        tmrw = (date.today() + timedelta(days=1)).strftime("%-d. %-m. %Y")   
     description = f"Zítra {tmrw} bude..."
 
     cl.photo_upload(weather_img, description)
     print("Photo uploaded")
 
 
+def post_radar(cl):
+    radar = Path("radar.mp4")
+
+    cl.video_upload_to_story(radar)
+    print("Radar story posted")
+
+
+def get_radar():
+    # Sets up selenium
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--window-size=599,800")
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)      
+
+    # Get image in browser
+    url = "https://www.ventusky.com/?l=radar&w=0AAaAp92A"
+    driver.get(url)
+
+    # Change language
+    menu = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.TAG_NAME, "menu"))
+    )
+
+    driver.execute_script("arguments[0].setAttribute('class','k')", menu)   
+    time.sleep(20)
+
+    menu_settings = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "menu-settings"))
+    ).click()
+
+    time.sleep(20)
+    lang_select = Select(driver.find_elements(By.CLASS_NAME, 'resp_table_cell')[1].find_element(By.TAG_NAME, "select"))
+    lang_select.select_by_value("cs")
+
+    close = WebDriverWait(driver, 10).until(
+        EC.element_to_be_clickable((By.CLASS_NAME, "aside_close_btn_ico"))
+    )
+    
+    action = ActionChains(driver)
+    action.click(on_element = close)
+    action.perform()
+
+    WebDriverWait(driver, 10).until(
+        EC.element_to_be_clickable((By.ID, "search-q"))
+    ).send_keys("Czech republic")
+
+    time.sleep(15)
+    listed = driver.find_element(By.ID, "header").find_element(By.TAG_NAME, "ul")
+    
+    listed_item = None
+    while not listed_item:
+        try:
+            listed_item = listed.find_element(By.TAG_NAME, "a")
+        except Exception:
+            print("Getting the czech republic from list")
+        time.sleep(2)
+    time.sleep(10)
+    listed_item.click()
+    
+    # Zoom in
+    driver.execute_script("const style = document.createElement('style');style.textContent = `.z { display: block !important; }`; document.head.appendChild(style);");
+    driver.find_element(By.CLASS_NAME, "z").click()
+    driver.execute_script("const style = document.createElement('style');style.textContent = `#header, menu, .z, .qw, #h { display: none !important; }`; document.head.appendChild(style);");
+
+    # Screenshoting right times
+    times = driver.find_element(By.CLASS_NAME, "ks").find_element(By.TAG_NAME, "ul")
+    hour_now = datetime.now()
+    for i in range(1, 10):
+        next = hour_now + timedelta(hours=i)
+        next_hour = "{:%H}".format(next)   
+
+        print(f"Searching for {next_hour}")
+        found = False
+        while not found:
+            time_elements = times.find_elements(By.TAG_NAME, "li")          
+
+            for elem in time_elements:
+                if elem.text == next_hour+":00" and "background: rgba(0, 0" not in elem.get_attribute("style"):
+                    print("Found it: "+elem.text)
+                    found = True
+                    
+                    time.sleep(20)
+                    driver.get_screenshot_as_file("img/radar/radar" + str(i) + ".png")
+                    time.sleep(35)
+
+                    print("Screenshot taken " + str(i))
+                    break
+
+            time.sleep(10)
+            if not found:
+                ActionChains(driver).move_to_element(time_elements[len(time_elements)-2]).click(time_elements[len(time_elements)-2]).perform()
+    print("Pocasi saved")
+
+
+def create_video():
+    if os.name == 'nt':
+        os.system('ffmpeg -framerate 1 -pattern_type sequence -start_number 00001 -i "./img/radar/radar%01d.png" -vcodec libx264  -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -r 24  -y -an radar.mp4')
+    else:    
+        os.system('ffmpeg -framerate 1 -pattern_type glob -i "./img/radar/*.png" -vcodec libx264  -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -r 24  -y -an radar.mp4')
+
 if __name__ == "__main__":
-    # Get pocasi image
-    screen = get_pocasi()
+    if datetime.now().hour < 10:
+        get_radar()
+        create_video()   
 
-    # Modify the image
-    pocasi_from_screen = crop_screen_img(screen)
-    cropped_pocasi = crop_to_template(pocasi_from_screen)
-    transparent_pocasi = change_opacity(cropped_pocasi)
+        random_wait = random.randint(30, 300)
+        print(f"Waiting {random_wait} seconds to disguise bot")
+        time.sleep(random_wait)
 
-    # Put it on template and save it
-    put_on_template(create_template(), transparent_pocasi)
+        cl = get_client()
+        post_radar(cl)      
+    else:     
+        random_wait = random.randint(30, 300)
+        print(f"Waiting {random_wait} seconds to disguise bot")
+        time.sleep(random_wait)    
+        
+        # Get pocasi image
+        screen = get_pocasi()
 
-    # Upload post to instagram
-    cl = get_client()
-    post_weather(cl)
+        # Modify the image
+        pocasi_from_screen = crop_screen_img(screen)
+        cropped_pocasi = crop_to_template(pocasi_from_screen)
+        transparent_pocasi = change_opacity(cropped_pocasi)
 
-    # Removing img results
-    os.remove("pocasi.jpg")
-    os.remove("pocasi.png")
+        # Put it on template and save it
+        put_on_template(create_template(), transparent_pocasi) 
+        
+        # Upload post to instagram
+        cl = get_client()
+        post_weather(cl)    
+        
+        # Removing img results
+        os.remove("pocasi.jpg")
+        os.remove("pocasi.png")
