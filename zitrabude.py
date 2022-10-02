@@ -241,7 +241,9 @@ if __name__ == "__main__":
         time.sleep(random_wait)
 
         cl = get_client()
-        post_radar(cl)      
+        post_radar(cl)     
+         
+        os.remove("radar.mp4")
     else:     
         random_wait = random.randint(30, 300)
         print(f"Waiting {random_wait} seconds to disguise bot")
