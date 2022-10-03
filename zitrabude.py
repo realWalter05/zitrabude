@@ -111,7 +111,7 @@ def create_template():
 def get_client():
     cl = Client()
     cl.load_settings('dumped.json')
-    #cl.login("zitrabude_", "Z&traB&de", verification_code=input("Code: "))  
+    #cl.login("zitrabude_", "", verification_code=input("Code: "))  
 
     cl.dump_settings('dumped.json')
     
