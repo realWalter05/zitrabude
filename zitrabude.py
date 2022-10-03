@@ -144,6 +144,7 @@ def get_radar():
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--window-size=599,800")
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)      
+    some_wait_time = 5
 
     # Get image in browser
     url = "https://www.ventusky.com/?l=radar&w=0AAaAp92A"
@@ -155,13 +156,13 @@ def get_radar():
     )
 
     driver.execute_script("arguments[0].setAttribute('class','k')", menu)   
-    time.sleep(20)
+    time.sleep(some_wait_time)
 
     menu_settings = WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.ID, "menu-settings"))
     ).click()
 
-    time.sleep(20)
+    time.sleep(some_wait_time)
     lang_select = Select(driver.find_elements(By.CLASS_NAME, 'resp_table_cell')[1].find_element(By.TAG_NAME, "select"))
     lang_select.select_by_value("cs")
 
@@ -177,7 +178,7 @@ def get_radar():
         EC.element_to_be_clickable((By.ID, "search-q"))
     ).send_keys("Czech republic")
 
-    time.sleep(15)
+    time.sleep(some_wait_time * 3)
     listed = driver.find_element(By.ID, "header").find_element(By.TAG_NAME, "ul")
     
     listed_item = None
@@ -187,7 +188,8 @@ def get_radar():
         except Exception:
             print("Getting the czech republic from list")
         time.sleep(2)
-    time.sleep(10)
+        
+    time.sleep(some_wait_time * 3)
     listed_item.click()
     
     # Zoom in
@@ -208,20 +210,28 @@ def get_radar():
             time_elements = times.find_elements(By.TAG_NAME, "li")          
 
             for elem in time_elements:
+                if "background: rgba(0, 0" not in elem.get_attribute("style"):
+                    print(f"Now we have: {elem.text}")
+                    time.sleep(some_wait_time)
+
                 if elem.text == next_hour+":00" and "background: rgba(0, 0" not in elem.get_attribute("style"):
                     print("Found it: "+elem.text)
                     found = True
                     
-                    time.sleep(20)
+                    time.sleep(some_wait_time)
                     driver.get_screenshot_as_file("img/radar/radar" + str(i) + ".png")
-                    time.sleep(35)
 
+                    time.sleep(some_wait_time * 3)
                     print("Screenshot taken " + str(i))
                     break
+            
+            if found:
+                break
+            
+            print("moving")
+            time.sleep(some_wait_time)
+            ActionChains(driver).move_to_element(time_elements[len(time_elements)-2]).click(time_elements[len(time_elements)-2]).perform()
 
-            time.sleep(10)
-            if not found:
-                ActionChains(driver).move_to_element(time_elements[len(time_elements)-2]).click(time_elements[len(time_elements)-2]).perform()
     print("Pocasi saved")
 
 
@@ -242,8 +252,10 @@ if __name__ == "__main__":
 
         cl = get_client()
         post_radar(cl)     
-         
+        
         os.remove("radar.mp4")
+        os.remove("radar.mp4.jpg")
+        
     else:     
         random_wait = random.randint(30, 300)
         print(f"Waiting {random_wait} seconds to disguise bot")
